@@ -50,7 +50,7 @@ app = Flask(__name__)
 def index():
     return "OK!"
 
-@app.route('/addDbEntry')
+@app.route('/addDbEntry', methods=['POST'])
 def addEntry():
     conf = getConfigMap()
     if hasattr(request, 'data') and request.data != None:
@@ -61,6 +61,9 @@ def addEntry():
     else:
         return "No JSON!", 400
     
+    if 'secret' not in data and data['secret'] != os.getenv('SECRET_KEY'):
+        return "INVALID SECRET", 401
+
     if 'type' in data and data['type'] in conf:
         dbViewPageBlock = conf[data['type']]
         addDbEntry(dbViewPageBlock.collection, data)
