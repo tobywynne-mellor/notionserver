@@ -46,10 +46,20 @@ def addDbEntry(collection, data):
 
 app = Flask(__name__)
 
+@app.route('/')
+def index():
+    return "OK!"
+
 @app.route('/addDbEntry')
 def addEntry():
     conf = getConfigMap()
-    data = json.loads(request.data)
+    if hasattr(request, 'data') and request.data != None:
+        try:
+            data = json.loads(request.data)
+        except:
+            return "NO JSON!", 400
+    else:
+        return "No JSON!", 400
     
     if 'type' in data and data['type'] in conf:
         dbViewPageBlock = conf[data['type']]
@@ -57,3 +67,6 @@ def addEntry():
         return "Added {} - {} to {}".format(data['name'], data['content'], data['type']), 200
             
     return "Bad Request : invalid type sent " + data['type'], 400
+
+if __name__ == "__main__":
+    app.run()
