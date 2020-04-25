@@ -4,6 +4,7 @@ from flask import Flask
 from flask import request
 from notion.client import NotionClient
 from notion.block import TextBlock
+from postProcessor import PostProcessor
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -22,7 +23,6 @@ def getConfigMap():
                 conf[row.name] = row.children[0]
     return conf
 
-
 def getBlock(id):
     return client.get_block(id)
 
@@ -32,17 +32,31 @@ def getCollectionView(url):
 def getProps(collection):
     return list(map(lambda prop : prop['slug'], collection.get_schema_properties()))
 
+def getTemplate(collection, type):
+    templates = collection.templates
+    for template in templates:
+        if template.name in type:
+            return template
+    return None
+
+def hasTemplate(collection, temptype):
+    templates = collection.templates
+    for template in templates:
+        if template.name in temptype:
+            return True
+    return False
+
 def addDbEntry(collection, data):
     print(collection.parent.views)
     row = collection.add_row()
     props = getProps(collection)
     for prop in data:
         if 'content' == prop:
-            print("content!")
-            row.children.add_new(TextBlock, title=data[prop])
+            block = TextBlock
+            row.children.add_new(block, title=data[prop])
         elif prop in props:
-            print(prop, data[prop])
-            row.__setattr__(prop, data[prop])
+            row.set_property(prop, data[prop])
+    return row
 
 app = Flask(__name__)
 
@@ -66,10 +80,15 @@ def addEntry():
 
     if 'type' in data and data['type'] in conf:
         dbViewPageBlock = conf[data['type']]
-        addDbEntry(dbViewPageBlock.collection, data)
+        entry = addDbEntry(dbViewPageBlock.collection, data)
+        if data['post_process'] == "true":
+            PostProcessor().process(entry, data['type'])
+            try:
+                print("")
+            except:
+                return "Bad Request : no post processor name contains: " + data['type'], 400
         return "Added {} - {} to {}".format(data['name'], data['content'], data['type']), 200
-            
     return "Bad Request : invalid type sent " + data['type'], 400
 
 if __name__ == "__main__":
-    app.run()
+    app.run(debug=True)
