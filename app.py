@@ -4,7 +4,6 @@ from flask import Flask
 from flask import request
 from notion.client import NotionClient
 from notion.block import TextBlock
-from postProcessor import PostProcessor
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -14,13 +13,16 @@ config_url = os.getenv('config_url')
 
 client = NotionClient(token_v2=token_v2)
 
+# returns {'config name / type' : first child / the collection_view_page}
 def getConfigMap():
     conf = {}
     config_collection = getBlock(config_url)
     for row in config_collection.collection.get_rows():
         if len(row.name) != 0 and len(row.children) != 0:
             if row.children[0].type == "collection_view_page":
-                conf[row.name] = row.children[0]
+                conf[row.name] = {"db" : row.children[0]}
+            if len(row.children) > 1 and row.children[1].type == "code":
+                conf[row.name]["processCode"] = row.children[1].title
     return conf
 
 def getBlock(id):
@@ -79,14 +81,12 @@ def addEntry():
         return "INVALID SECRET", 401
 
     if 'type' in data and data['type'] in conf:
-        dbViewPageBlock = conf[data['type']]
+        dbViewPageBlock = conf[data['type']]['db']
         entry = addDbEntry(dbViewPageBlock.collection, data)
-        if data['post_process'] == "true":
-            PostProcessor().process(entry, data['type'])
-            try:
-                print("")
-            except:
-                return "Bad Request : no post processor name contains: " + data['type'], 400
+        try:
+            exec(conf[data['type']]['processCode'], {'entry': entry})
+        except:
+            raise EnvironmentError("Error with processCode")
         return "Added {} - {} to {}".format(data['name'], data['content'], data['type']), 200
     return "Bad Request : invalid type sent " + data['type'], 400
 
